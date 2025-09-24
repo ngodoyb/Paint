@@ -1,37 +1,412 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.min.js"></script>
+    <title>Dibuja y Suena</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .genre-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        
+        .genre-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .genre-btn.active {
+            background: rgba(255,255,255,0.4);
+            box-shadow: 0 0 20px rgba(255,255,255,0.3);
+        }
+        
+        .canvas-container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: inline-block;
+            backdrop-filter: blur(10px);
+        }
+        
+        .info {
+            margin-top: 20px;
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .clear-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: rgba(255,100,100,0.8);
+            border: none;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .clear-btn:hover {
+            background: rgba(255,100,100,1);
+            transform: scale(1.05);
+        }
+        
+        .genre-info {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+    </style>
 </head>
 <body>
-    <h1>Mi propio Paintbrush</h1> 
+    <div class="container">
+        <h1>🎨 Dibuja y Suena 🎵</h1>
+        <p class="subtitle">Cada trazo es una melodía diferente</p>
+        
+        <div class="controls">
+            <button class="genre-btn active" data-genre="rock">🎸 Rock</button>
+            <button class="genre-btn" data-genre="jazz">🎷 Jazz</button>
+            <button class="genre-btn" data-genre="electronic">🔊 Electrónica</button>
+            <button class="genre-btn" data-genre="classical">🎼 Clásica</button>
+            <button class="genre-btn" data-genre="reggae">🌴 Reggae</button>
+            <button class="genre-btn" data-genre="blues">🎺 Blues</button>
+        </div>
+        
+        <div class="canvas-container">
+            <div id="canvas-holder"></div>
+        </div>
+        
+        <button class="clear-btn" onclick="clearCanvas()">🗑️ Limpiar Lienzo</button>
+        
+        <div class="info">
+            <div id="current-genre">Género actual: <strong>Rock</strong></div>
+            <div class="genre-info">Dibuja para crear música. Diferentes movimientos generan diferentes sonidos.</div>
+        </div>
+    </div>
 
     <script>
-        let nombreMaria = "Maria"
-        let nombreJuan = "Juan"
-        let edadMaria = 20;
-        let edadJuan = 25;
-        let edadTotal = 0;
-        let nombrePedro = null;
-        console. log (edadTotal)
-        console.log (nombreMaria + " tiene " + edadMaria + " años.")
-        console.log (nombreJuan + " tiene " + edadJuan + " años.")
-        calcularEdad = () => {
-            //edad += 1;
-            if (edadMaria >= 18) {
-                esMayorDeEdad = true;
-            } else {
-                esMayorDeEdad = false;
+        // Variables globales
+        let currentGenre = 'rock';
+        let instruments = {};
+        let isDrawing = false;
+        let lastDrawTime = 0;
+        let drawingSpeed = 0;
+        let audioInitialized = false;
+        
+        // Configuración de géneros musicales
+        const genres = {
+            rock: {
+                name: 'Rock',
+                color: [255, 100, 100],
+                instruments: ['distortion', 'drums'],
+                scale: ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'],
+                tempo: 140
+            },
+            jazz: {
+                name: 'Jazz',
+                color: [100, 150, 255],
+                instruments: ['piano', 'bass'],
+                scale: ['C4', 'D4', 'Eb4', 'F#4', 'G4', 'Bb4', 'C5'],
+                tempo: 120
+            },
+            electronic: {
+                name: 'Electrónica',
+                color: [100, 255, 100],
+                instruments: ['synth', 'drums'],
+                scale: ['C4', 'D4', 'F4', 'G4', 'A4', 'C5'],
+                tempo: 128
+            },
+            classical: {
+                name: 'Clásica',
+                color: [255, 200, 100],
+                instruments: ['piano', 'strings'],
+                scale: ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'],
+                tempo: 90
+            },
+            reggae: {
+                name: 'Reggae',
+                color: [255, 255, 100],
+                instruments: ['guitar', 'bass'],
+                scale: ['C4', 'D4', 'E4', 'G4', 'A4'],
+                tempo: 90
+            },
+            blues: {
+                name: 'Blues',
+                color: [150, 100, 255],
+                instruments: ['guitar', 'harmonica'],
+                scale: ['C4', 'Eb4', 'F4', 'F#4', 'G4', 'Bb4', 'C5'],
+                tempo: 100
             }
-            edadTotal = edadJuan + edadMaria;
+        };
+        
+        // Inicializar Tone.js
+        async function initAudio() {
+            if (audioInitialized) return;
+            
+            try {
+                await Tone.start();
+                console.log('Audio iniciado correctamente');
+                
+                // Crear instrumentos
+                instruments.distortion = new Tone.PolySynth({
+                    oscillator: { type: 'sawtooth' },
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.3, release: 1 }
+                }).chain(
+                    new Tone.Distortion(0.8),
+                    new Tone.Filter(2000, 'lowpass'),
+                    Tone.Destination
+                );
+                
+                instruments.piano = new Tone.PolySynth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.02, decay: 0.3, sustain: 0.2, release: 2 }
+                }).toDestination();
+                
+                instruments.synth = new Tone.PolySynth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.05, decay: 0.1, sustain: 0.6, release: 0.8 }
+                }).chain(
+                    new Tone.Filter(1500, 'lowpass'),
+                    new Tone.Reverb(0.3),
+                    Tone.Destination
+                );
+                
+                instruments.guitar = new Tone.PolySynth({
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1.5 }
+                }).chain(
+                    new Tone.Chorus(4, 2.5, 0.5),
+                    Tone.Destination
+                );
+                
+                instruments.bass = new Tone.MonoSynth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.1, decay: 0.3, sustain: 0.1, release: 1.2 },
+                    filter: { Q: 6, type: 'lowpass', rolloff: -24 }
+                }).toDestination();
+                
+                instruments.strings = new Tone.PolySynth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.5, decay: 0.2, sustain: 0.8, release: 2 }
+                }).chain(
+                    new Tone.Reverb(0.6),
+                    Tone.Destination
+                );
+                
+                instruments.harmonica = new Tone.PolySynth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.1, decay: 0.3, sustain: 0.7, release: 1 }
+                }).chain(
+                    new Tone.Filter(800, 'bandpass'),
+                    Tone.Destination
+                );
+                
+                // Crear batería simple
+                instruments.drums = {
+                    kick: new Tone.MembraneSynth().toDestination(),
+                    snare: new Tone.NoiseSynth({
+                        noise: { type: 'white' },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+                    }).toDestination(),
+                    hihat: new Tone.MetalSynth({
+                        frequency: 400,
+                        envelope: { attack: 0.001, decay: 0.1, release: 0.01 },
+                        harmonicity: 5.1,
+                        modulationIndex: 32,
+                        resonance: 4000,
+                        octaves: 1.5
+                    }).toDestination()
+                };
+                
+                audioInitialized = true;
+                console.log('Instrumentos creados correctamente');
+                
+            } catch (error) {
+                console.error('Error inicializando audio:', error);
+            }
         }
-
-        calcularEdad();
-        console.log(edadTotal);
-        console.log(nombrePedro);
+        
+        // Funciones de sonido
+        function playNote(x, y, velocity) {
+            if (!audioInitialized) {
+                console.log('Audio no inicializado aún');
+                return;
+            }
+            
+            const genre = genres[currentGenre];
+            const noteIndex = Math.floor((x / width) * genre.scale.length);
+            const note = genre.scale[noteIndex];
+            
+            // Ajustar octava basada en la posición Y
+            const octaveShift = Math.floor((1 - y / height) * 2);
+            const adjustedNote = note.replace(/\d/, (match) => parseInt(match) + octaveShift);
+            
+            try {
+                // Tocar instrumentos principales
+                if (genre.instruments.includes('distortion') && instruments.distortion) {
+                    instruments.distortion.triggerAttackRelease(adjustedNote, '8n');
+                }
+                if (genre.instruments.includes('piano') && instruments.piano) {
+                    instruments.piano.triggerAttackRelease(adjustedNote, '4n', undefined, velocity);
+                }
+                if (genre.instruments.includes('synth') && instruments.synth) {
+                    instruments.synth.triggerAttackRelease(adjustedNote, '8n', undefined, velocity);
+                }
+                if (genre.instruments.includes('guitar') && instruments.guitar) {
+                    instruments.guitar.triggerAttackRelease(adjustedNote, '4n', undefined, velocity * 0.8);
+                }
+                if (genre.instruments.includes('strings') && instruments.strings) {
+                    instruments.strings.triggerAttackRelease(adjustedNote, '2n', undefined, velocity * 0.6);
+                }
+                if (genre.instruments.includes('harmonica') && instruments.harmonica) {
+                    instruments.harmonica.triggerAttackRelease(adjustedNote, '4n', undefined, velocity);
+                }
+                
+                // Bass line
+                if (genre.instruments.includes('bass') && instruments.bass && Math.random() > 0.7) {
+                    const bassNote = genre.scale[0].replace(/\d/, '2');
+                    instruments.bass.triggerAttackRelease(bassNote, '4n', undefined, 0.8);
+                }
+                
+                // Percusión
+                if (genre.instruments.includes('drums') && instruments.drums && velocity > 0.5) {
+                    if (Math.random() > 0.8 && instruments.drums.kick) {
+                        instruments.drums.kick.triggerAttackRelease('C1', '8n');
+                    }
+                    if (Math.random() > 0.6 && instruments.drums.snare) {
+                        instruments.drums.snare.triggerAttackRelease('8n');
+                    }
+                    if (Math.random() > 0.4 && instruments.drums.hihat) {
+                        instruments.drums.hihat.triggerAttackRelease('32n');
+                    }
+                }
+            } catch (error) {
+                console.error('Error reproduciendo nota:', error);
+            }
+        }
+        
+        // Funciones P5.js
+        function setup() {
+            let canvas = createCanvas(800, 600);
+            canvas.parent('canvas-holder');
+            background(255);
+            
+            // Inicializar audio con el primer clic
+            canvas.mousePressed(async () => {
+                if (!audioInitialized) {
+                    console.log('Inicializando audio...');
+                    await initAudio();
+                }
+            });
+        }
+        
+        function draw() {
+            // No hacer nada en draw para mantener los trazos
+        }
+        
+        function mouseDragged() {
+            if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+                isDrawing = true;
+                
+                // Calcular velocidad del dibujo
+                const currentTime = millis();
+                drawingSpeed = dist(mouseX, mouseY, pmouseX, pmouseY) / (currentTime - lastDrawTime + 1);
+                lastDrawTime = currentTime;
+                
+                // Configurar color y grosor basado en el género
+                const genre = genres[currentGenre];
+                stroke(genre.color[0], genre.color[1], genre.color[2], 150);
+                strokeWeight(map(drawingSpeed, 0, 20, 2, 8));
+                
+                // Dibujar línea
+                line(mouseX, mouseY, pmouseX, pmouseY);
+                
+                // Tocar sonido basado en la velocidad y posición
+                const velocity = map(drawingSpeed, 0, 20, 0.3, 1);
+                playNote(mouseX, mouseY, velocity);
+            }
+        }
+        
+        function mouseReleased() {
+            isDrawing = false;
+        }
+        
+        // Event listeners para botones
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.genre-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    // Inicializar audio si no está inicializado
+                    if (!audioInitialized) {
+                        console.log('Inicializando audio desde botón...');
+                        await initAudio();
+                    }
+                    
+                    // Remover clase active de todos los botones
+                    document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
+                    
+                    // Agregar clase active al botón clickeado
+                    e.target.classList.add('active');
+                    
+                    // Cambiar género
+                    currentGenre = e.target.dataset.genre;
+                    document.getElementById('current-genre').innerHTML = `Género actual: <strong>${genres[currentGenre].name}</strong>`;
+                });
+            });
+        });
+        
+        function clearCanvas() {
+            background(255);
+        }
     </script>
 </body>
 </html>
